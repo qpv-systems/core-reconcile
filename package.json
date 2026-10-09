@@ -1,0 +1,59 @@
+{
+  "name": "@qpv-systems/core-reconcile",
+  "version": "0.1.0",
+  "description": "Configurable TypeScript reconciliation for two data sources, with exact decimals, traceable results, and bounded sorted streaming.",
+  "license": "MIT",
+  "author": "QPV Systems",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qpv-systems/core-reconcile.git"
+  },
+  "homepage": "https://github.com/qpv-systems/core-reconcile#readme",
+  "bugs": {
+    "url": "https://github.com/qpv-systems/core-reconcile/issues"
+  },
+  "keywords": ["reconciliation", "typescript", "streaming", "decimal", "bank", "commission", "xlsx"],
+  "publishConfig": { "access": "public" },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./excel": {
+      "types": "./dist/adapters/excel.d.ts",
+      "import": "./dist/adapters/excel.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "build": "node node_modules/typescript/bin/tsc -p tsconfig.json",
+    "test": "node node_modules/typescript/bin/tsc -p tsconfig.json && node --test test/reconciliation.test.mjs test/edge-cases.test.mjs test/streaming.test.mjs test/adapters.test.mjs",
+    "check": "node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
+    "test:memory": "node node_modules/typescript/bin/tsc -p tsconfig.json && node --max-old-space-size=32 test/streaming-memory.mjs",
+    "test:excel-memory": "node node_modules/typescript/bin/tsc -p tsconfig.json && node test/excel-memory.mjs generate && node --max-old-space-size=32 test/excel-memory.mjs read",
+    "prepack": "node node_modules/typescript/bin/tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "@types/unzipper": "^0.10.11",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
+    "typescript": "^5.9.3"
+  },
+  "optionalDependencies": {
+    "saxes": "^6.0.0",
+    "unzipper": "^0.12.3"
+  }
+}
