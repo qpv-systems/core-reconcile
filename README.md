@@ -11,7 +11,7 @@ Simplify reconciliation. Reuse the same engine across domains.
 ![TypeScript](https://img.shields.io/badge/TypeScript-typed-3178c6?logo=typescript&logoColor=white)
 [![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
-[Quickstart](#quickstart) · [API](#public-api) · [Use cases](#use-cases-and-boundaries) · [Adapters](docs/adapters.md) · [Changelog](CHANGELOG.md)
+[Quickstart](#quickstart) · [API](#public-api) · [Use cases](#use-cases-and-boundaries) · [Adapters](docs/adapters.md) · [Playground](https://github.com/qpv-systems/reconciliation-portal) · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -915,7 +915,7 @@ Checkpointed partition processing can resume from application-managed committed 
 
 ## Install from source
 
-Build and install the current source version before it is published to npm:
+Build and install a local source checkout when developing or testing changes:
 
 ```sh
 git clone https://github.com/qpv-systems/core-reconcile.git
@@ -932,7 +932,7 @@ Core imports have no runtime library dependencies. The optional Node-only `/exce
 
 ## Development and verification
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, Husky hooks, commit conventions, and how to write and validate documentation before npm publication. You can install a local tarball and use the complete package API while registry publishing access is unavailable.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, Husky hooks, commit conventions, and how to write and validate documentation. Local tarballs let you test the complete package API before releasing changes.
 
 ```sh
 npm ci
