@@ -4,7 +4,7 @@
 
 **Configurable reconciliation for TypeScript.**
 
-Compare two sources using stable identifiers and return results you can trace.
+Simplify reconciliation. Reuse the same engine across domains.
 
 ![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-2563eb)
 ![Node.js >=22.18](https://img.shields.io/badge/Node.js-%3E%3D22.18-43853d?logo=nodedotjs&logoColor=white)
@@ -14,6 +14,8 @@ Compare two sources using stable identifiers and return results you can trace.
 [Quickstart](#quickstart) · [API](#public-api) · [Use cases](#use-cases-and-boundaries) · [Adapters](docs/adapters.md) · [Changelog](CHANGELOG.md)
 
 </div>
+
+`@qpv-systems/core-reconcile` is built to simplify reconciliation and make its core logic reusable across domains. Provide your two datasets, define the matching and comparison rules, and decide how your application uses the output. The package handles matching, comparisons, duplicate and conflict detection, discrepancy reporting, and summary counts, so you can focus on your business rules instead of writing the reconciliation engine for every integration.
 
 Use `@qpv-systems/core-reconcile` for bank transactions, commissions, refunds, orders, inventory, and other records with explicit matching and comparison rules. Either source can be a database, file, or already-loaded dataset.
 
