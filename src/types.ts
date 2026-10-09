@@ -1,8 +1,15 @@
 export type ReconciliationStatus =
-  | 'MATCHED' | 'MISSING_INTERNAL' | 'MISSING_PARTNER'
-  | 'AMOUNT_MISMATCH' | 'STATUS_MISMATCH' | 'FEE_MISMATCH'
-  | 'TYPE_MISMATCH' | 'CURRENCY_MISMATCH' | 'FIELD_MISMATCH'
-  | 'PENDING_RECHECK' | 'MANUAL_REVIEW';
+  | 'MATCHED'
+  | 'MISSING_INTERNAL'
+  | 'MISSING_PARTNER'
+  | 'AMOUNT_MISMATCH'
+  | 'STATUS_MISMATCH'
+  | 'FEE_MISMATCH'
+  | 'TYPE_MISMATCH'
+  | 'CURRENCY_MISMATCH'
+  | 'FIELD_MISMATCH'
+  | 'PENDING_RECHECK'
+  | 'MANUAL_REVIEW';
 
 export interface SourceRow<T> {
   /** Stable source identifier; mandatory for traceability. */
@@ -32,9 +39,15 @@ export interface Comparison<L, R> {
   internal: Selector<L>;
   partner: Selector<R>;
   kind: 'exact' | 'decimal';
-  mismatchStatus?: Extract<ReconciliationStatus,
-    'AMOUNT_MISMATCH' | 'STATUS_MISMATCH' | 'FEE_MISMATCH' |
-    'TYPE_MISMATCH' | 'CURRENCY_MISMATCH' | 'FIELD_MISMATCH'>;
+  mismatchStatus?: Extract<
+    ReconciliationStatus,
+    | 'AMOUNT_MISMATCH'
+    | 'STATUS_MISMATCH'
+    | 'FEE_MISMATCH'
+    | 'TYPE_MISMATCH'
+    | 'CURRENCY_MISMATCH'
+    | 'FIELD_MISMATCH'
+  >;
   /** Decimal strings only: no floating-point arithmetic. Default zero. */
   tolerance?: string;
   normalize?: (value: unknown, side: 'internal' | 'partner') => unknown;

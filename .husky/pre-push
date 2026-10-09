@@ -1,0 +1,2 @@
+node node_modules/typescript/bin/tsc -p tsconfig.json
+node --test test/reconciliation.test.mjs test/edge-cases.test.mjs test/streaming.test.mjs test/adapters.test.mjs

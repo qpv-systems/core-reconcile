@@ -15,42 +15,78 @@ const folder = await mkdtemp(join(parent, 'core-reconcile-package-'));
 
 function npm(args, cwd) {
   return execFileSync(process.execPath, [npmCli, ...args], {
-    cwd, encoding: 'utf8', timeout: 120000, maxBuffer: 1024 * 1024,
+    cwd,
+    encoding: 'utf8',
+    timeout: 120000,
+    maxBuffer: 1024 * 1024,
     stdio: ['ignore', 'pipe', 'inherit'],
   });
 }
 
 try {
   // The script builds before entering here; avoid extra lifecycle output in JSON.
-  const manifests = JSON.parse(npm(['pack', '--json', '--ignore-scripts', '--pack-destination', folder], root));
+  const manifests = JSON.parse(
+    npm(['pack', '--json', '--ignore-scripts', '--pack-destination', folder], root),
+  );
   assert.equal(manifests.length, 1);
   const artifact = manifests[0];
   assert.equal(artifact.name, '@qpv-systems/core-reconcile');
   assert.equal(basename(artifact.filename), artifact.filename);
-  const files = new Set(artifact.files.map(file => file.path));
-  for (const required of ['package.json', 'README.md', 'LICENSE', 'CHANGELOG.md',
-    'dist/index.js', 'dist/index.d.ts', 'dist/adapters/excel.js', 'dist/adapters/excel.d.ts']) {
+  const files = new Set(artifact.files.map((file) => file.path));
+  for (const required of [
+    'package.json',
+    'README.md',
+    'CONTRIBUTING.md',
+    'LICENSE',
+    'CHANGELOG.md',
+    'dist/index.js',
+    'dist/index.d.ts',
+    'dist/adapters/excel.js',
+    'dist/adapters/excel.d.ts',
+  ]) {
     assert.ok(files.has(required), `Missing package file: ${required}`);
   }
   for (const file of files) {
-    assert.match(file, /^(dist\/|docs\/|package\.json$|README\.md$|LICENSE$|CHANGELOG\.md$)/);
+    assert.match(
+      file,
+      /^(dist\/|docs\/|package\.json$|README\.md$|CONTRIBUTING\.md$|LICENSE$|CHANGELOG\.md$)/,
+    );
     assert.doesNotMatch(file, /(^|\/)(demo|server|test|node_modules)(\/|\.|$)/);
   }
 
   const consumer = join(folder, 'consumer');
   await mkdir(consumer);
-  await writeFile(join(consumer, 'package.json'), JSON.stringify({
-    name: 'core-reconcile-consumer-check', private: true, type: 'module',
-  }));
-  npm(['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', join(folder, artifact.filename)], consumer);
+  await writeFile(
+    join(consumer, 'package.json'),
+    JSON.stringify({
+      name: 'core-reconcile-consumer-check',
+      private: true,
+      type: 'module',
+    }),
+  );
+  npm(
+    ['install', '--omit=dev', '--no-audit', '--no-fund', join(folder, artifact.filename)],
+    consumer,
+  );
 
   // Generate an exact-value fixture without installing test dependencies in the consumer.
   const zip = new JSZip();
-  zip.file('xl/workbook.xml', '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Records" sheetId="1" r:id="rId1"/></sheets></workbook>');
-  zip.file('xl/_rels/workbook.xml.rels', '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>');
-  zip.file('xl/worksheets/sheet1.xml', '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>id</t></is></c><c r="B1" t="inlineStr"><is><t>amount</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>001</t></is></c><c r="B2"><v>9007199254740993.01</v></c></row></sheetData></worksheet>');
+  zip.file(
+    'xl/workbook.xml',
+    '<workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Records" sheetId="1" r:id="rId1"/></sheets></workbook>',
+  );
+  zip.file(
+    'xl/_rels/workbook.xml.rels',
+    '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+  );
+  zip.file(
+    'xl/worksheets/sheet1.xml',
+    '<worksheet><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>id</t></is></c><c r="B1" t="inlineStr"><is><t>amount</t></is></c></row><row r="2"><c r="A2" t="inlineStr"><is><t>001</t></is></c><c r="B2"><v>9007199254740993.01</v></c></row></sheetData></worksheet>',
+  );
   await writeFile(join(consumer, 'input.xlsx'), await zip.generateAsync({ type: 'nodebuffer' }));
-  await writeFile(join(consumer, 'smoke.mjs'), String.raw`
+  await writeFile(
+    join(consumer, 'smoke.mjs'),
+    String.raw`
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -101,11 +137,16 @@ for await (const event of core.reconcileSorted({
 assert.equal(entries, 1);
 assert.equal(completed, true);
 console.log('Installed package: public exports, exact decimals, database and Excel verified.');
-`);
+`,
+  );
   execFileSync(process.execPath, [join(consumer, 'smoke.mjs')], {
-    cwd: consumer, timeout: 60000, stdio: 'inherit',
+    cwd: consumer,
+    timeout: 60000,
+    stdio: 'inherit',
   });
-  console.log(`Package ${artifact.name}@${artifact.version}: ${files.size} files verified; no server or demo.`);
+  console.log(
+    `Package ${artifact.name}@${artifact.version}: ${files.size} files verified; no server or demo.`,
+  );
 } finally {
   assert.equal(dirname(resolve(folder)), parent);
   assert.ok(basename(folder).startsWith('core-reconcile-package-'));

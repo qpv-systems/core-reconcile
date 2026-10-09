@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  HUSKY: '0'
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -28,6 +31,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -35,6 +39,19 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Check formatting
+        run: npm run format:check
+      - name: Lint package code
+        run: npm run lint
+      - name: Check pull request commit messages
+        if: github.event_name == 'pull_request' && matrix.os == 'ubuntu-latest' && matrix.node == '24'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node node_modules/@commitlint/cli/cli.js --from "$BASE_SHA" --to "$HEAD_SHA" --verbose
+      - name: Check latest commit message
+        if: github.event_name != 'pull_request' && matrix.os == 'ubuntu-latest' && matrix.node == '24'
+        run: node node_modules/@commitlint/cli/cli.js --last --verbose
       - name: Check TypeScript
         run: npm run check
       - name: Build and run regression tests
