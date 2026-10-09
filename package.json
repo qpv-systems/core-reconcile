@@ -59,7 +59,7 @@
     "lint:staged": "node node_modules/lint-staged/bin/lint-staged.js",
     "commitlint": "node node_modules/@commitlint/cli/cli.js",
     "prepare": "node .husky/install.mjs",
-    "test:package": "node node_modules/typescript/bin/tsc -p tsconfig.json && node scripts/verify-package.mjs",
+    "test:package": "node node_modules/typescript/bin/tsc -p tsconfig.json && node test/package-install.mjs",
     "test:memory": "node node_modules/typescript/bin/tsc -p tsconfig.json && node --max-old-space-size=32 test/streaming-memory.mjs",
     "test:excel-memory": "node node_modules/typescript/bin/tsc -p tsconfig.json && node test/excel-memory.mjs generate && node --max-old-space-size=32 test/excel-memory.mjs read",
     "prepack": "node node_modules/typescript/bin/tsc -p tsconfig.json"

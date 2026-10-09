@@ -1,4 +1,4 @@
-// Exercise the actual npm artifact in an isolated consumer, outside this repo.
+// Test the actual npm artifact in an isolated consumer, outside this repo.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';

@@ -1,6 +1,6 @@
 // Restrict tasks to package files; local server/demo files are outside this repo.
 export default {
-  '{src,scripts,test}/**/*.{js,mjs,ts}': [
+  '{src,test}/**/*.{js,mjs,ts}': [
     'node node_modules/prettier/bin/prettier.cjs --write',
     'node node_modules/eslint/bin/eslint.js --max-warnings=0',
   ],

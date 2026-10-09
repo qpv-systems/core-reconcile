@@ -30,13 +30,13 @@ The package returns objects or events to your application. You choose storage, r
 
 ### 1. Install
 
-Requires **Node.js 22.18+** and an **ESM** application. Version `0.1.0` has not been published to npm yet; [build the tarball from source](#install-from-source), then install it in your application:
+Requires **Node.js 22.18+** and an **ESM** application.
 
 ```sh
-npm install /path/to/qpv-systems-core-reconcile-0.1.0.tgz
+npm install @qpv-systems/core-reconcile
 ```
 
-Once published, the registry command will be `npm install @qpv-systems/core-reconcile`.
+For local development, see [install from source](#install-from-source).
 
 ### 2. Pass two datasets and define the rules
 
