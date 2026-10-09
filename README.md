@@ -1,54 +1,44 @@
+<div align="center">
+
 # Core Reconcile
 
-**Compare two sources. Explain every outcome. Keep business decisions in your application.**
+**Configurable reconciliation for TypeScript.**
 
-`@qpv-systems/core-reconcile` · **v0.1.0** · TypeScript · ESM · Node.js >= 22.18 · [MIT](LICENSE)
+Compare two sources using stable identifiers and return results you can trace.
 
-[Source](https://github.com/qpv-systems/core-reconcile) · [Issues](https://github.com/qpv-systems/core-reconcile/issues) · [Changelog](CHANGELOG.md) · [Input adapters](docs/adapters.md)
+![Version 0.1.0](https://img.shields.io/badge/version-0.1.0-2563eb)
+![Node.js >=22.18](https://img.shields.io/badge/Node.js-%3E%3D22.18-43853d?logo=nodedotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-typed-3178c6?logo=typescript&logoColor=white)
+[![MIT License](https://img.shields.io/badge/license-MIT-16a34a)](LICENSE)
 
-A configurable reconciliation core for comparing records from two sources. Use it for bank transactions, commissions, orders, inventory, or another domain with stable identifiers and explicit comparison rules.
+[Quickstart](#quickstart) · [API](#public-api) · [Use cases](#use-cases-and-boundaries) · [Adapters](docs/adapters.md) · [Changelog](CHANGELOG.md)
 
-The core returns structured results. Your application decides where to store them, how to display them, and which business actions to take. It does not connect to databases, update source records, move money, or automatically retry a run. A separate Node-only adapter reads `.xlsx`; database helpers adapt caller-owned cursors or batches.
+</div>
 
-**Current scope:** deterministic one-to-one matching, exact/decimal comparisons, traceable exceptions, optional aggregates, and sorted streaming. One-to-many matching, fuzzy matching, currency conversion, and refund accounting are not implemented.
+Use `@qpv-systems/core-reconcile` for bank transactions, commissions, refunds, orders, inventory, and other records with explicit matching and comparison rules. Either source can be a database, file, or already-loaded dataset.
 
-## Contents
+- **Explain outcomes:** matched rows, discrepancies, source IDs/lines, and summary counts.
+- **Preserve exact values:** decimal-string comparisons with explicit absolute tolerances.
+- **Process large inputs:** sorted streaming with backpressure and bounded key groups.
+- **Keep rules configurable:** independent selectors, composite identifiers, status mappings, and missing-data policies.
 
-- [Getting started](#getting-started)
-- [Public API](#public-api)
-- [Use cases and boundaries](#use-cases-and-boundaries)
-- [Commission example](#commission-example)
-- [Terminology and workflow](#terminology-and-workflow)
-- [Reconciliation statuses](#reconciliation-statuses)
-- [Pending recheck versus manual review](#pending-recheck-versus-manual-review)
-- [Rules and options](#rules-and-options)
-- [Output reference](#output-reference)
-- [Issue codes](#issue-codes)
-- [Streaming large sources](#streaming-large-sources)
-- [Excel and database adapters](#excel-and-database-adapters)
-- [Persistence, failures, and retries](#persistence-failures-and-retries)
-- [Development and verification](#development-and-verification)
-- [Release notes](#release-notes)
+The package returns objects or events to your application. You choose storage, reports, and business actions. It does not write to your systems or move money.
 
-## Getting started
+## Quickstart
 
-Requires Node.js **22.18 or newer**. The repository uses TypeScript 5.9 to build. Core imports have no runtime library dependencies; the optional `/excel` entry uses `unzipper`, `saxes`, and Node SQLite. The build is ESM; no CommonJS export is provided.
+### 1. Install
 
-Version `0.1.0` is prepared as an npm package; this repository does not imply that it has been published to the registry. Build and install a local tarball today:
+Requires **Node.js 22.18+** and an **ESM** application. Version `0.1.0` has not been published to npm yet; [build the tarball from source](#install-from-source), then install it in your application:
 
 ```sh
-git clone https://github.com/qpv-systems/core-reconcile.git
-cd core-reconcile
-# If this change has not been merged yet:
-git checkout feat/package-release
-npm ci
-npm run build
-npm pack
-# In your consuming application, install the resulting tarball:
 npm install /path/to/qpv-systems-core-reconcile-0.1.0.tgz
 ```
 
-After a registry release, installation will be `npm install @qpv-systems/core-reconcile`. The TypeScript examples below assume the package is installed. JavaScript callers use the same functions without type annotations.
+Once published, the registry command will be `npm install @qpv-systems/core-reconcile`.
+
+### 2. Pass two datasets and define the rules
+
+Each source contains `{ id, line?, data }` rows. `id` identifies the source row; selectors read a stable business key and comparison values from `data`. This example produces **one match and one amount mismatch**:
 
 ```ts
 import {
@@ -60,6 +50,7 @@ import {
 interface RecordData {
   reference: string;
   amount?: string;
+  currency: string;
   status: string;
 }
 
@@ -75,8 +66,13 @@ const config: ReconciliationConfig<RecordData, RecordData> = {
       name: 'amount', kind: 'decimal',
       internal: record => record.amount,
       partner: record => record.amount,
-      tolerance: '0.01', missing: 'pending',
       mismatchStatus: 'AMOUNT_MISMATCH',
+    },
+    {
+      name: 'currency', kind: 'exact',
+      internal: record => record.currency,
+      partner: record => record.currency,
+      mismatchStatus: 'CURRENCY_MISMATCH',
     },
     {
       name: 'sourceStatus', kind: 'exact',
@@ -92,71 +88,134 @@ const input: ReconciliationInput<RecordData, RecordData> = {
   processedAt: '2026-10-09T03:00:00Z', config,
   internal: {
     sourceId: 'left-snapshot-001', complete: true,
-    rows: [{ id: 'left-row-1', data: {
-      reference: 'REF-001', amount: '100.00', status: 'APPROVED',
-    } }],
+    rows: [
+      { id: 'left-row-1', data: {
+        reference: 'REF-001', amount: '100.00', currency: 'USD', status: 'APPROVED',
+      } },
+      { id: 'left-row-2', data: {
+        reference: 'REF-002', amount: '50.00', currency: 'USD', status: 'APPROVED',
+      } },
+    ],
   },
   partner: {
     sourceId: 'right-snapshot-001', complete: true,
-    rows: [{ id: 'right-row-1', line: 2, data: {
-      reference: 'REF-001', amount: '100.00', status: 'APPROVED',
-    } }],
+    rows: [
+      { id: 'right-row-1', line: 2, data: {
+        reference: 'REF-001', amount: '100.00', currency: 'USD', status: 'APPROVED',
+      } },
+      { id: 'right-row-2', line: 3, data: {
+        reference: 'REF-002', amount: '60.00', currency: 'USD', status: 'APPROVED',
+      } },
+    ],
   },
 };
 
 const result = reconcile(input);
-console.log(result.entries[0]?.status); // MATCHED
-console.log(result.summary.matchedPairs); // 1
-console.log(result.matchedRows); // Original source rows for matched pairs
 ```
 
-Select any fields appropriate to your domain: `amount`, `commissionAmount`, `quantity`, `fee`, or `approvalStatus` are application concepts, not mandatory input column names. Selectors can differ between sources.
+Amounts use **strings**, not JavaScript numbers. This example requires exact amount/currency/status equality; tolerance defaults to `"0"`. `complete: true` asserts that the application has confirmed both snapshots are complete.
 
-## Public API
-
-The package exposes functions and a reusable factory. It does not require an HTTP server or a framework.
-
-| Export | Call | Return value |
-|---|---|---|
-| `reconcile` | `reconcile(input)` | Synchronous `ReconciliationResult<L, R>` for bounded arrays. |
-| `createReconciler` | `createReconciler(config)` | Object exposing `reconcile(inputWithoutConfig)` with reusable rules. |
-| `reconcileSorted` | `reconcileSorted(streamingInput)` | Async generator of `StreamingEvent<L, R>`. |
-| `createSortKey` | `createSortKey({ name, selectors, normalize? })` | Function mapping a domain record to its encoded canonical key. |
-| `reconcilePartitions` | `reconcilePartitions(partitions)` | Async generator of `{ partitionId, result }`. |
-| `readDatabaseRows` | `readDatabaseRows(rows, options)` | Async generator of `SourceRow<T>`. |
-| `readDatabaseBatches` | `readDatabaseBatches(batches, options)` | Async generator of `SourceRow<T>`, flattening bounded pages. |
-| `ReconciliationInputError` | `error instanceof ReconciliationInputError` | Error class for core validation failures. |
-| `readExcelRows` from `/excel` | `readExcelRows(filePath, options)` | Async generator of `SourceRow<T>`; Node only. |
-| `ExcelInputError` from `/excel` | `error instanceof ExcelInputError` | Error class for workbook validation failures. |
-
-Root type exports: `ReconciliationStatus`, `SourceRow`, `Source`, `Selector`, `MatchKey`, `Comparison`, `AggregateFields`, `ReconciliationConfig`, `ReconciliationInput`, `Issue`, `ReconciliationEntry`, `Aggregate`, `ReconciliationResult`, `StreamingSource`, `StreamingInput`, `StreamingEvent`, `DatabaseRowsOptions`, and `DatabaseBatchOptions`. The `/excel` subpath exports `ExcelValue`, `ExcelRecord`, `ExcelRowContext`, and `ExcelRowsOptions`.
-
-### Reuse a rule configuration
-
-This example continues the getting-started example:
+### 3. Read the result
 
 ```ts
-import { createReconciler } from '@qpv-systems/core-reconcile';
-
-const engine = createReconciler(config);
-const { config: originalConfig, ...runInput } = input;
-const nextResult = engine.reconcile({ ...runInput, runId: 'attempt-002' });
-console.log(nextResult.summary);
+console.log(JSON.stringify({
+  matched: result.summary.matchedPairs,
+  nonMatched: result.summary.nonMatchedEntries,
+  entries: result.entries.map(entry => ({
+    leftRowId: entry.internal?.id,
+    rightRowId: entry.partner?.id,
+    status: entry.status,
+    issues: entry.issues,
+  })),
+}, null, 2));
 ```
 
-### Process safe partitions
+Output:
 
-```ts
-import { reconcilePartitions } from '@qpv-systems/core-reconcile';
-
-// A single partition is safe for this bounded example.
-const partitions = [{ partitionId: 'scope-001', input }];
-for await (const { partitionId, result } of reconcilePartitions(partitions)) {
-  console.log(partitionId, result.summary.matchedPairs);
+```json
+{
+  "matched": 1,
+  "nonMatched": 1,
+  "entries": [
+    {
+      "leftRowId": "left-row-1",
+      "rightRowId": "right-row-1",
+      "status": "MATCHED",
+      "issues": []
+    },
+    {
+      "leftRowId": "left-row-2",
+      "rightRowId": "right-row-2",
+      "status": "AMOUNT_MISMATCH",
+      "issues": [{
+        "code": "VALUE_MISMATCH",
+        "message": "Values differ beyond configured tolerance",
+        "field": "amount",
+        "internalValue": "50.00",
+        "partnerValue": "60.00",
+        "difference": "-10"
+      }]
+    }
+  ]
 }
 ```
 
-For production, supply an async generator of bounded, correctly grouped partitions and persist/checkpoint each result atomically. Partition by a scope that keeps every possible matching relationship together, such as tenant plus account. Splitting each side into arbitrary 1,000-row chunks is unsafe.
+`difference` is left minus right. Original transaction statuses remain `APPROVED`; `AMOUNT_MISMATCH` is a separate reconciliation outcome.
+
+| Need | Read from the result |
+|---|---|
+| Counts and per-status statistics | `result.summary` |
+| Every pair or unmatched row, with reasons | `result.entries` |
+| Original rows that passed all configured checks | `result.matchedRows.internal` / `.partner` |
+| Mismatch, pending, and review entries with source lines | `result.errorRows` |
+| Optional grouped totals and aggregation errors | `result.aggregates` / `result.aggregateIssues` |
+
+In this example, `matchedRows.internal` contains `left-row-1`; `errorRows[0].partner.line` is `3`. Use the original IDs to prepare inserts/updates under your application policy. Results are returned to you; the package does not save them automatically.
+
+Select any fields appropriate to your domain: `amount`, `commissionAmount`, `quantity`, `fee`, or `approvalStatus` are application concepts, not mandatory input column names. Selectors can differ between sources.
+
+## Documentation
+
+| Start here | Reference | Production integration |
+|---|---|---|
+| [Execution modes](#choose-an-execution-mode) | [Public API](#public-api) | [Sorted streaming](#streaming-large-sources) |
+| [Terminology and workflow](#terminology-and-workflow) | [Statuses](#reconciliation-statuses) | [Excel and database inputs](#excel-and-database-adapters) |
+| [Use cases](#use-cases-and-boundaries) | [Pending vs. review](#pending-recheck-versus-manual-review) | [Persistence and retries](#persistence-failures-and-retries) |
+| [Commission example](#commission-example) | [Rules and options](#rules-and-options) | [Development and CI](#development-and-verification) |
+| [Install from source](#install-from-source) | [Output reference](#output-reference) | [Release notes](#release-notes) |
+| [Adapter guide](docs/adapters.md) | [Issue codes](#issue-codes) | [Changelog](CHANGELOG.md) |
+
+## Choose an execution mode
+
+| Data shape | API | Preparation |
+|---|---|---|
+| Small, already-loaded datasets | `reconcile()` / `createReconciler()` | Arrays; sorting is unnecessary. |
+| Large cursors or file streams | `reconcileSorted()` | Both sources sorted by the same single canonical key. |
+| Large data divided into safe matching scopes | `reconcilePartitions()` | Keep every possible matching relationship in one bounded partition. |
+
+The Quickstart uses arrays to make the input/output visible. For millions of rows, use a streaming adapter and await your output sink; do not collect the entire input or all results into arrays. See [streaming large sources](#streaming-large-sources) for ordering and memory requirements.
+
+## Terminology and workflow
+
+| Term | Meaning |
+|---|---|
+| Record | One source item wrapped in `{ id, line?, data }`. |
+| Source row ID (`id`) | Unique row identity within a snapshot; separate from the matching key. |
+| Matching key | Stable business identifier or composite identifier used to find counterparts. |
+| Batch (`batchId`) | The business scope being reconciled. |
+| Run (`runId`) | One processing attempt; use a new ID for each retry or recheck. |
+| Source (`sourceId`) | Immutable input snapshot, such as a database extraction or file checksum. Change its identity when contents change. |
+| Entry | A reconciliation outcome containing a pair, or one row without a safely established counterpart. |
+| Issue | A specific reason a record differs or cannot be processed safely. |
+
+The in-memory API names the sides `internal` and `partner`. Streaming input names them `left` and `right`; streaming output still uses `internal` and `partner`. **Either side can come from a database or file.** These names do not determine which source is authoritative.
+
+```text
+Read sources → locate records by stable identifiers → reject ambiguous matching
+             → compare uniquely paired rows → return entries and statistics
+```
+
+The package does not compare line 1 to line 1. A row on line 2 can match a row on line 50 through its identifier. Duplicate keys are examined before choosing a counterpart; the engine never selects the first duplicate arbitrarily.
 
 ## Use cases and boundaries
 
@@ -259,27 +318,51 @@ console.log(commissions.aggregates); // Independent source totals: 25 and 25.01.
 
 Tolerance can allow a matched pair while source totals differ. The engine does not infer a batch failure from aggregate differences. Compare grouped totals under a separate, explicit business policy. For refunds or reversals, select stable event IDs (or a composite payment/event key) and compare the signed amounts supplied by your business mapping; no sign conversion occurs automatically.
 
-## Terminology and workflow
+## Public API
 
-| Term | Meaning |
-|---|---|
-| Record | One source item wrapped in `{ id, line?, data }`. |
-| Source row ID (`id`) | Unique row identity within a snapshot; separate from the matching key. |
-| Matching key | Stable business identifier or composite identifier used to find counterparts. |
-| Batch (`batchId`) | The business scope being reconciled. |
-| Run (`runId`) | One processing attempt; use a new ID for each retry or recheck. |
-| Source (`sourceId`) | Immutable input snapshot, such as a database extraction or file checksum. Change its identity when contents change. |
-| Entry | A reconciliation outcome containing a pair, or one row without a safely established counterpart. |
-| Issue | A specific reason a record differs or cannot be processed safely. |
+The package exposes functions and a reusable factory. It does not require an HTTP server or a framework.
 
-The in-memory API names the sides `internal` and `partner`. Streaming input names them `left` and `right`; streaming output still uses `internal` and `partner`. **Either side can come from a database or file.** These names do not determine which source is authoritative.
+| Export | Call | Return value |
+|---|---|---|
+| `reconcile` | `reconcile(input)` | Synchronous `ReconciliationResult<L, R>` for bounded arrays. |
+| `createReconciler` | `createReconciler(config)` | Object exposing `reconcile(inputWithoutConfig)` with reusable rules. |
+| `reconcileSorted` | `reconcileSorted(streamingInput)` | Async generator of `StreamingEvent<L, R>`. |
+| `createSortKey` | `createSortKey({ name, selectors, normalize? })` | Function mapping a domain record to its encoded canonical key. |
+| `reconcilePartitions` | `reconcilePartitions(partitions)` | Async generator of `{ partitionId, result }`. |
+| `readDatabaseRows` | `readDatabaseRows(rows, options)` | Async generator of `SourceRow<T>`. |
+| `readDatabaseBatches` | `readDatabaseBatches(batches, options)` | Async generator of `SourceRow<T>`, flattening bounded pages. |
+| `ReconciliationInputError` | `error instanceof ReconciliationInputError` | Error class for core validation failures. |
+| `readExcelRows` from `/excel` | `readExcelRows(filePath, options)` | Async generator of `SourceRow<T>`; Node only. |
+| `ExcelInputError` from `/excel` | `error instanceof ExcelInputError` | Error class for workbook validation failures. |
 
-```text
-Read sources → locate records by stable identifiers → reject ambiguous matching
-             → compare uniquely paired rows → return entries and statistics
+Root type exports: `ReconciliationStatus`, `SourceRow`, `Source`, `Selector`, `MatchKey`, `Comparison`, `AggregateFields`, `ReconciliationConfig`, `ReconciliationInput`, `Issue`, `ReconciliationEntry`, `Aggregate`, `ReconciliationResult`, `StreamingSource`, `StreamingInput`, `StreamingEvent`, `DatabaseRowsOptions`, and `DatabaseBatchOptions`. The `/excel` subpath exports `ExcelValue`, `ExcelRecord`, `ExcelRowContext`, and `ExcelRowsOptions`.
+
+### Reuse a rule configuration
+
+This example continues the Quickstart:
+
+```ts
+import { createReconciler } from '@qpv-systems/core-reconcile';
+
+const engine = createReconciler(config);
+const { config: originalConfig, ...runInput } = input;
+const nextResult = engine.reconcile({ ...runInput, runId: 'attempt-002' });
+console.log(nextResult.summary);
 ```
 
-The package does not compare line 1 to line 1. A row on line 2 can match a row on line 50 through its identifier. Duplicate keys are examined before choosing a counterpart; the engine never selects the first duplicate arbitrarily.
+### Process safe partitions
+
+```ts
+import { reconcilePartitions } from '@qpv-systems/core-reconcile';
+
+// A single partition is safe for this bounded example.
+const partitions = [{ partitionId: 'scope-001', input }];
+for await (const { partitionId, result } of reconcilePartitions(partitions)) {
+  console.log(partitionId, result.summary.matchedPairs);
+}
+```
+
+For production, supply an async generator of bounded, correctly grouped partitions and persist/checkpoint each result atomically. Partition by a scope that keeps every possible matching relationship together, such as tenant plus account. Splitting each side into arbitrary 1,000-row chunks is unsafe.
 
 ## Reconciliation statuses
 
@@ -532,7 +615,7 @@ Raw records may contain sensitive information or bigints. Decide access/redactio
 ### Inspect matched rows and discrepancy details
 
 ```ts
-// Reuses `result` from the getting-started example.
+// Reuses `result` from the Quickstart.
 const successfulLeftRowIds = result.matchedRows.internal.map(row => row.id);
 const successfulRightLineNumbers = result.matchedRows.partner
   .flatMap(row => row.line === undefined ? [] : [row.line]);
@@ -600,7 +683,7 @@ Aggregate issues are separate: an aggregate-selector problem does not automatica
 ```ts
 import { reconcileSorted } from '@qpv-systems/core-reconcile';
 
-// Reuses the sorted one-row input from the getting-started example.
+// Reuses the two-row sources from the Quickstart, already sorted by reference.
 for await (const event of reconcileSorted({
   batchId: input.batchId, runId: input.runId,
   processedAt: input.processedAt, config: input.config,
@@ -743,18 +826,40 @@ Output is not saved to a hidden directory or retained by a service. For `reconci
 
 Checkpointed partition processing can resume from application-managed committed partition IDs. Sorted streaming has no built-in resume cursor: rerun a failed attempt from immutable snapshots, or implement a proven group-boundary checkpoint strategy externally. Finalize reports only after a `complete` event and successful sink commits. Processing completion and durable persistence are separate responsibilities.
 
+## Install from source
+
+Build and install the current source version before it is published to npm:
+
+```sh
+git clone https://github.com/qpv-systems/core-reconcile.git
+cd core-reconcile
+# While the package changes remain on this branch:
+git checkout feat/package-release
+npm ci
+npm pack
+```
+
+`npm pack` builds the package through its `prepack` script. It produces `qpv-systems-core-reconcile-0.1.0.tgz`; install that file in your consuming application as shown in the Quickstart. The package includes compiled ESM and TypeScript declarations. No CommonJS export is provided.
+
+Core imports have no runtime library dependencies. The optional Node-only `/excel` entry requires `unzipper`, `saxes`, and Node SQLite. See the [adapter guide](docs/adapters.md) for optional-dependency installation and resource budgets.
+
 ## Development and verification
 
 ```sh
 npm ci
 npm run check
 npm test
+npm run test:package
 npm run test:memory
 npm run test:excel-memory
 npm pack --dry-run
 ```
 
 Tests cover matches, multiple discrepancies, duplicate identities/keys, alternative identifier conflicts, explicit refund events, tolerance boundaries, incomplete inputs, rerun identity, partition rules, streaming failures/cancellation, cursor backpressure/cleanup, and workbook validation/precision. They do not establish database transaction or worker-lock correctness; those belong to your integration.
+
+GitHub Actions runs on pushes, pull requests, merge-queue events, and manual dispatch. The test matrix covers Linux and Windows with Node 22.18.0 (the minimum supported version) and Node 24. It installs locked dependencies, checks TypeScript, runs regression tests, and installs the actual tarball in an isolated consumer to verify public exports, exact decimals, database/Excel integration, and package contents. Server and demo files are rejected by the artifact check.
+
+A separate Linux job runs the million-pair streaming test and the 100,000-row Excel test with 32 MiB of Node old-generation space. The stable `CI passed` check succeeds only if all matrix tests and memory checks succeed; failed, canceled, or skipped prerequisite jobs do not pass. To block merges when checks fail, configure the repository's branch protection or ruleset to require `CI passed`. The workflow itself does not change repository merge settings or publish the package.
 
 For a million-pair core smoke test:
 

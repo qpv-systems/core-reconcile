@@ -41,6 +41,7 @@
     "build": "node node_modules/typescript/bin/tsc -p tsconfig.json",
     "test": "node node_modules/typescript/bin/tsc -p tsconfig.json && node --test test/reconciliation.test.mjs test/edge-cases.test.mjs test/streaming.test.mjs test/adapters.test.mjs",
     "check": "node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
+    "test:package": "node node_modules/typescript/bin/tsc -p tsconfig.json && node scripts/verify-package.mjs",
     "test:memory": "node node_modules/typescript/bin/tsc -p tsconfig.json && node --max-old-space-size=32 test/streaming-memory.mjs",
     "test:excel-memory": "node node_modules/typescript/bin/tsc -p tsconfig.json && node test/excel-memory.mjs generate && node --max-old-space-size=32 test/excel-memory.mjs read",
     "prepack": "node node_modules/typescript/bin/tsc -p tsconfig.json"
