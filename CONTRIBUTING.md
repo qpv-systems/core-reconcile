@@ -67,7 +67,7 @@ Common types are `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci
 
 ## Write documentation before npm publication
 
-Documentation does not depend on a registry release. Describe the current source API, run its examples locally, and label registry installation as available only after publication.
+Documentation does not depend on a registry release. Describe the current source API and run its examples locally. The README uses the intended npm installation command; a release maintainer must publish the matching version before registry installation is available.
 
 | Document           | Purpose                                                                                                      |
 | ------------------ | ------------------------------------------------------------------------------------------------------------ |
