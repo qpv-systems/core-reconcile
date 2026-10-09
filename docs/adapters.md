@@ -4,9 +4,9 @@ The reconciliation core consumes `SourceRow<T>` records. Adapters normalize exte
 
 ```ts
 interface SourceRow<T> {
-  id: string;     // Stable identity within one immutable source snapshot
+  id: string; // Stable identity within one immutable source snapshot
   line?: number; // Physical file row or optional extraction reference
-  data: T;       // Your typed domain record
+  data: T; // Your typed domain record
 }
 ```
 
@@ -14,14 +14,14 @@ interface SourceRow<T> {
 
 `AsyncIterable<SourceRow<T>>` is the recommended integration boundary for large database inputs. The core does not depend on a SQL dialect, ORM, connection, or driver. Use a cursor/stream or keyset-paginated query, select only needed columns, and preserve an immutable snapshot/cutoff for retries.
 
-| Option | Default | Contract |
-|---|---|---|
-| `getId(rawRow)` | Required | Synchronously returns a nonempty stable string ID. |
-| `map(rawRow)` | Raw row unchanged | Returns your domain record or a promise of it. |
-| `getLine(rawRow)` | Omitted | Returns a positive safe integer or `undefined`. |
-| `close()` | None | Optional synchronous/async resource cleanup after an entered iteration. |
-| `signal` | None | `AbortSignal` for adapter cancellation checks. |
-| `maxBatchRows` | `1000` | Positive safe integer; applies only to `readDatabaseBatches`. |
+| Option            | Default           | Contract                                                                |
+| ----------------- | ----------------- | ----------------------------------------------------------------------- |
+| `getId(rawRow)`   | Required          | Synchronously returns a nonempty stable string ID.                      |
+| `map(rawRow)`     | Raw row unchanged | Returns your domain record or a promise of it.                          |
+| `getLine(rawRow)` | Omitted           | Returns a positive safe integer or `undefined`.                         |
+| `close()`         | None              | Optional synchronous/async resource cleanup after an entered iteration. |
+| `signal`          | None              | `AbortSignal` for adapter cancellation checks.                          |
+| `maxBatchRows`    | `1000`            | Positive safe integer; applies only to `readDatabaseBatches`.           |
 
 ### Cursor or row stream
 
@@ -31,14 +31,16 @@ The following example assumes `cursor` is an async iterable of database records 
 import { readDatabaseRows } from '@qpv-systems/core-reconcile';
 
 const leftRows = readDatabaseRows(cursor, {
-  getId: row => String(row.primaryKey),
-  map: row => ({
+  getId: (row) => String(row.primaryKey),
+  map: (row) => ({
     reference: row.reference,
     amount: row.amount, // Request DECIMAL/NUMERIC as a string in your driver.
     currency: row.currency,
   }),
   // Use this only for resources not already released by iterator.return().
-  close: async () => { await cursor.close(); },
+  close: async () => {
+    await cursor.close();
+  },
   signal: abortController.signal,
 });
 ```
@@ -68,7 +70,7 @@ async function* pages() {
 }
 
 const rows = readDatabaseBatches(pages(), {
-  getId: row => row.id,
+  getId: (row) => row.id,
   maxBatchRows: 500,
   close: () => cursor.close(),
 });
@@ -88,7 +90,7 @@ const rightRows = readExcelRows('./partner.xlsx', {
   sheet: 'Transactions', // Name or 1-based workbook position; default 1
   headerRow: 1,
   requiredColumns: ['reference', 'amount', 'currency'],
-  map: record => ({
+  map: (record) => ({
     reference: record.reference,
     amount: record.amount,
     currency: record.currency,
@@ -96,17 +98,17 @@ const rightRows = readExcelRows('./partner.xlsx', {
 });
 ```
 
-| Option | Default | Contract |
-|---|---|---|
-| `sourceId` | Required | Nonempty immutable workbook snapshot identity. |
-| `sheet` | `1` | Exact sheet name or positive 1-based workbook index. |
-| `headerRow` | `1` | Positive physical worksheet row number containing headers. |
-| `requiredColumns` | None | Required exact header names; additional columns are allowed. |
-| `map(record, context)` | Parsed record unchanged | Domain record or promise; numeric cells are already strings. |
-| `getId(record, context)` | JSON tuple of source, sheet, row | Nonempty stable string row identity. Runs before mapping. |
-| `formulas` | `'reject'` | `'reject'` fails formula cells; `'cached'` accepts existing results without recalculation. |
-| `tempDirectory` | OS temporary directory | Writable parent for owned temporary staging files. |
-| `signal` | None | `AbortSignal` for cancellation. |
+| Option                   | Default                          | Contract                                                                                   |
+| ------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------ |
+| `sourceId`               | Required                         | Nonempty immutable workbook snapshot identity.                                             |
+| `sheet`                  | `1`                              | Exact sheet name or positive 1-based workbook index.                                       |
+| `headerRow`              | `1`                              | Positive physical worksheet row number containing headers.                                 |
+| `requiredColumns`        | None                             | Required exact header names; additional columns are allowed.                               |
+| `map(record, context)`   | Parsed record unchanged          | Domain record or promise; numeric cells are already strings.                               |
+| `getId(record, context)` | JSON tuple of source, sheet, row | Nonempty stable string row identity. Runs before mapping.                                  |
+| `formulas`               | `'reject'`                       | `'reject'` fails formula cells; `'cached'` accepts existing results without recalculation. |
+| `tempDirectory`          | OS temporary directory           | Writable parent for owned temporary staging files.                                         |
+| `signal`                 | None                             | `AbortSignal` for cancellation.                                                            |
 
 Context is `{ sheetName: string, sheetIndex: number, rowNumber: number }`; indexes and physical row numbers are 1-based. Parsed cell values are `string | boolean | null`. Resource budget options are listed below.
 
@@ -131,17 +133,17 @@ Default row IDs encode `[sourceId, sheetName, physicalRowNumber]` as JSON. Optio
 
 Rows are yielded lazily after ZIP parts and the shared-string table have been staged. The adapter first streams the ZIP archive into a generated temporary directory; it then resolves shared strings from an on-disk SQLite table and parses only the selected worksheet in 16 KiB chunks. It does not buffer the entire workbook or shared-string table in a JS array. It may use disk proportional to expanded workbook size, so the first row is not necessarily immediate.
 
-| Option | Default | Purpose |
-|---|---:|---|
-| `maxInputBytes` | 512 MiB | Limit compressed input file size. |
-| `maxExpandedBytes` | 2 GiB | Limit total streamed uncompressed ZIP bytes, including ignored parts. |
-| `maxMetadataBytes` | 1 MiB per metadata part | Bound workbook/sheet relationship metadata. |
-| `maxSheets` | 128 | Limit worksheet parts and metadata sheet count. |
-| `maxColumns` | 256 | Limit cell-column indexes. |
-| `maxCellChars` | 65,536 | Bound cell/shared-string text and serialized XML tokens. |
-| `maxRowChars` | 1,048,576 | Bound text within one worksheet row. |
-| `tempDirectory` | OS temporary directory | Location for owned staging files and SQLite table. |
-| `signal` | None | Check/interrupt reading on cancellation. |
+| Option             |                 Default | Purpose                                                               |
+| ------------------ | ----------------------: | --------------------------------------------------------------------- |
+| `maxInputBytes`    |                 512 MiB | Limit compressed input file size.                                     |
+| `maxExpandedBytes` |                   2 GiB | Limit total streamed uncompressed ZIP bytes, including ignored parts. |
+| `maxMetadataBytes` | 1 MiB per metadata part | Bound workbook/sheet relationship metadata.                           |
+| `maxSheets`        |                     128 | Limit worksheet parts and metadata sheet count.                       |
+| `maxColumns`       |                     256 | Limit cell-column indexes.                                            |
+| `maxCellChars`     |                  65,536 | Bound cell/shared-string text and serialized XML tokens.              |
+| `maxRowChars`      |               1,048,576 | Bound text within one worksheet row.                                  |
+| `tempDirectory`    |  OS temporary directory | Location for owned staging files and SQLite table.                    |
+| `signal`           |                    None | Check/interrupt reading on cancellation.                              |
 
 All numeric budgets are positive safe integers. They bound resources but are not an unconditional guarantee against OOM or running out of disk. Parsing queues are bounded to one chunk's emitted rows; caller buffering and record mapping can still increase memory. SQLite is provided by Node (`node:sqlite`) and its stability/experimental warnings depend on the Node version. The default SQLite page cache is configured around 2 MiB; this is not a process RSS cap.
 
@@ -156,16 +158,21 @@ import { reconcileSorted, readDatabaseRows } from '@qpv-systems/core-reconcile';
 import { readExcelRows } from '@qpv-systems/core-reconcile/excel';
 
 for await (const event of reconcileSorted({
-  batchId, runId, processedAt, config,
+  batchId,
+  runId,
+  processedAt,
+  config,
   left: {
-    sourceId: databaseSnapshotId, complete: true,
+    sourceId: databaseSnapshotId,
+    complete: true,
     rows: readDatabaseRows(cursor, {
-      getId: row => row.id,
+      getId: (row) => row.id,
       close: () => cursor.close(),
     }),
   },
   right: {
-    sourceId: fileChecksum, complete: true,
+    sourceId: fileChecksum,
+    complete: true,
     rows: readExcelRows('./partner.xlsx', {
       sourceId: fileChecksum,
       requiredColumns: ['reference', 'amount'],

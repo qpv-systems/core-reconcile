@@ -1,9 +1,10 @@
 node_modules/
 dist/
-*.tgz
 demo/
 test/demo.test.mjs
 test/fixtures/
 .test-output/
-.readme-check.mts
 .husky/_/
+.readme-check.mts
+package-lock.json
+*.tgz
