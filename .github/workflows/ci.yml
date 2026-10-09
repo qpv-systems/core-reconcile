@@ -3,23 +3,79 @@ name: CI
 on:
   push:
   pull_request:
+  merge_group:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Test (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         node: ['22.18.0', '24']
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
-      - run: npm run check
-      - run: npm test
-      - run: npm pack --dry-run
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check TypeScript
+        run: npm run check
+      - name: Build and run regression tests
+        run: npm test
+      - name: Verify installed package and tarball contents
+        run: npm run test:package
+
+  memory:
+    name: Streaming memory checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build package
+        run: npm run build
+      - name: Reconcile one million pairs with constrained old space
+        run: node --max-old-space-size=32 test/streaming-memory.mjs 1000000
+      - name: Read 100,000 Excel rows with constrained old space
+        run: npm run test:excel-memory
+
+  ci-passed:
+    name: CI passed
+    if: ${{ always() }}
+    needs: [test, memory]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every job to succeed
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+          MEMORY_RESULT: ${{ needs.memory.result }}
+        run: |
+          test "$TEST_RESULT" = success
+          test "$MEMORY_RESULT" = success
